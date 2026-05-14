@@ -1,65 +1,170 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from "react";
+
+type Tab = "home" | "calendar" | "menu" | "prints" | "settings";
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<Tab>("home");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImageUrl(URL.createObjectURL(file));
+    setActiveTab("prints");
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="min-h-screen bg-white p-4">
+      <div className="mx-auto max-w-md rounded-[34px] bg-sky-50 shadow-2xl border border-sky-100 overflow-hidden">
+        <section className="bg-sky-200 px-5 py-5 text-center">
+          <h1 className="text-3xl font-black text-blue-800">ほいく紙管理</h1>
+          <p className="text-sm font-bold text-blue-600">保育園プリントを一元管理</p>
+        </section>
+
+        <section className="p-4 space-y-4">
+          {activeTab === "home" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-3xl bg-blue-50 p-4 text-center shadow">
+                  <img src="/hayabusa.png" className="mx-auto h-16 object-contain" />
+                  <p className="mt-2 text-xl font-black text-blue-700">碧</p>
+                  <p className="text-sm font-bold text-gray-600">もも組</p>
+                </div>
+
+                <div className="rounded-3xl bg-pink-50 p-4 text-center shadow">
+                  <img src="/anpanman.png" className="mx-auto h-16 object-contain" />
+                  <p className="mt-2 text-xl font-black text-pink-600">海未</p>
+                  <p className="text-sm font-bold text-gray-600">ひよこ組</p>
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white p-4 shadow">
+                <h2 className="text-lg font-black">☀️ 今日やること</h2>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-2xl bg-orange-50 p-3">
+                    <p className="font-black text-orange-600">📅 土曜保育申込</p>
+                    <p className="text-xs text-gray-600">毎週月曜に確認</p>
+                  </div>
+                  <div className="rounded-2xl bg-blue-50 p-3">
+                    <p className="font-black text-blue-700">碧：体操服</p>
+                    <p className="text-xs text-gray-600">木曜は体操の日</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white p-4 shadow">
+                <h2 className="mb-3 text-lg font-black">📷 プリントスキャン</h2>
+
+                <label className="block w-full rounded-2xl bg-blue-600 p-4 text-center text-white font-black shadow cursor-pointer">
+                  カメラ・写真を開く
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFile}
+                  />
+                </label>
+
+                <p className="mt-2 text-xs text-gray-500">
+                  撮影後、プリント一覧に表示されます
+                </p>
+              </div>
+
+              <div className="rounded-3xl bg-yellow-50 p-4 shadow">
+                <h2 className="text-lg font-black">🍚 今日の献立</h2>
+                <p className="mt-2 font-bold">ごはん・ハンバーグ・野菜スープ</p>
+              </div>
+            </>
+          )}
+
+          {activeTab === "calendar" && (
+            <div className="rounded-3xl bg-white p-4 shadow">
+              <h2 className="text-xl font-black">📅 カレンダー</h2>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-2xl bg-blue-50 p-3">
+                  <p className="font-black">毎週木曜：体操服</p>
+                  <p className="text-sm text-gray-600">碧 / 持ち物 / 毎週</p>
+                </div>
+                <div className="rounded-2xl bg-green-50 p-3">
+                  <p className="font-black">5/20：親子遠足</p>
+                  <p className="text-sm text-gray-600">共通 / 行事</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "menu" && (
+            <div className="rounded-3xl bg-yellow-50 p-4 shadow">
+              <h2 className="text-xl font-black">🍚 献立表</h2>
+              <div className="mt-3 space-y-2">
+                <div className="rounded-2xl bg-white p-3">
+                  <p className="font-black">今日</p>
+                  <p className="text-sm">ごはん・ハンバーグ・野菜スープ</p>
+                </div>
+                <div className="rounded-2xl bg-white p-3">
+                  <p className="font-black">明日</p>
+                  <p className="text-sm">パン・クリームシチュー・バナナ</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "prints" && (
+            <div className="rounded-3xl bg-white p-4 shadow">
+              <h2 className="text-xl font-black">📄 プリント一覧</h2>
+
+              <label className="mt-3 block w-full rounded-2xl bg-blue-600 p-4 text-center text-white font-black shadow cursor-pointer">
+                新しくスキャンする
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFile}
+                />
+              </label>
+
+              {imageUrl ? (
+                <div className="mt-4 rounded-2xl bg-sky-50 p-3">
+                  <p className="mb-2 font-black">読み込んだプリント</p>
+                  <img src={imageUrl} className="w-full rounded-xl border" />
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">
+                  まだプリントはありません。
+                </p>
+              )}
+            </div>
+          )}
+
+          {activeTab === "settings" && (
+            <div className="rounded-3xl bg-white p-4 shadow">
+              <h2 className="text-xl font-black">⚙️ 設定</h2>
+              <p className="mt-2 text-sm text-gray-600">ここで組名変更などを追加予定。</p>
+            </div>
+          )}
+
+          <nav className="grid grid-cols-5 rounded-3xl bg-white p-3 shadow text-center text-[11px] font-bold">
+            <button onClick={() => setActiveTab("home")} className={activeTab === "home" ? "text-blue-600" : "text-gray-500"}>
+              <div className="text-2xl">🏠</div>ホーム
+            </button>
+            <button onClick={() => setActiveTab("calendar")} className={activeTab === "calendar" ? "text-blue-600" : "text-gray-500"}>
+              <div className="text-2xl">📅</div>カレンダー
+            </button>
+            <button onClick={() => setActiveTab("menu")} className={activeTab === "menu" ? "text-blue-600" : "text-gray-500"}>
+              <div className="text-2xl">🍚</div>献立
+            </button>
+            <button onClick={() => setActiveTab("prints")} className={activeTab === "prints" ? "text-blue-600" : "text-gray-500"}>
+              <div className="text-2xl">📄</div>プリント
+            </button>
+            <button onClick={() => setActiveTab("settings")} className={activeTab === "settings" ? "text-blue-600" : "text-gray-500"}>
+              <div className="text-2xl">⚙️</div>設定
+            </button>
+          </nav>
+        </section>
+      </div>
+    </main>
   );
 }
