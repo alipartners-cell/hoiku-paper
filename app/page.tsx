@@ -500,8 +500,26 @@ function DayDetail({
 }
 
 function parseGeminiJson(raw: string): AnalyzeResult {
-  const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
-  return JSON.parse(cleaned) as AnalyzeResult;
+  try {
+    const cleaned = raw
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+
+    if (firstBrace === -1 || lastBrace === -1) {
+      throw new Error("JSONが見つかりません");
+    }
+
+    const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
+
+    return JSON.parse(jsonText) as AnalyzeResult;
+  } catch (e) {
+    console.error("JSON解析失敗:", raw);
+    throw e;
+  }
 }
 
 function resizeImageToBase64(file: File, maxWidth: number, quality: number): Promise<string> {
