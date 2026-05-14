@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Tab = "home" | "calendar" | "menu" | "prints" | "settings";
 type ChildTarget = "碧" | "海未" | "共通";
@@ -38,6 +38,18 @@ type AnalyzeResult = {
   events?: AnalyzedEvent[];
 };
 
+type SavedState = {
+  imagePreview: string | null;
+  imageBase64: string | null;
+  menuDays: AnalyzedDay[];
+  events: AnalyzedEvent[];
+  manualRules: ManualRule[];
+  selectedDate: string;
+  analysisRaw: string;
+};
+
+const STORAGE_KEY = "hoiku-paper-v1";
+
 const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const dayOfWeekMap: Record<number, string> = {
@@ -50,9 +62,15 @@ const dayOfWeekMap: Record<number, string> = {
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState("5/20");
+
+  const today = new Date();
+  const defaultSelectedDate = today.getMonth() + 1 === 5 ? `5/${today.getDate()}` : "5/20";
+  const [selectedDate, setSelectedDate] = useState(defaultSelectedDate);
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisRaw, setAnalysisRaw] = useState("");
 
@@ -77,16 +95,66 @@ export default function Home() {
       date: "",
       memo: "木曜は体操の日",
     },
+    {
+      id: 2,
+      title: "土曜保育申込",
+      child: "共通",
+      type: "提出物",
+      repeat: "毎週",
+      dayOfWeek: "月",
+      monthDay: "",
+      date: "",
+      memo: "忘れずに申込",
+    },
   ]);
 
   const [manualTitle, setManualTitle] = useState("");
   const [manualChild, setManualChild] = useState<ChildTarget>("碧");
   const [manualType, setManualType] = useState<ManualType>("持ち物");
-  const [manualRepeat, setManualRepeat] = useState<RepeatType>("毎週");
+  const [manualRepeat, setManualRepeat] = useState<RepeatType>("なし");
   const [manualDayOfWeek, setManualDayOfWeek] = useState("木");
   const [manualMonthDay, setManualMonthDay] = useState("");
   const [manualDate, setManualDate] = useState("");
   const [manualMemo, setManualMemo] = useState("");
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
+      setHydrated(true);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved) as SavedState;
+      setImagePreview(parsed.imagePreview || null);
+      setImageBase64(parsed.imageBase64 || null);
+      setMenuDays(parsed.menuDays || []);
+      setEvents(parsed.events || []);
+      setManualRules(parsed.manualRules || []);
+      setSelectedDate(parsed.selectedDate || defaultSelectedDate);
+      setAnalysisRaw(parsed.analysisRaw || "");
+    } catch {
+      // 壊れた保存データは無視
+    }
+
+    setHydrated(true);
+  }, [defaultSelectedDate]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const saveData: SavedState = {
+      imagePreview,
+      imageBase64,
+      menuDays,
+      events,
+      manualRules,
+      selectedDate,
+      analysisRaw,
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+  }, [hydrated, imagePreview, imageBase64, menuDays, events, manualRules, selectedDate, analysisRaw]);
 
   const expandedManualEvents = useMemo(() => {
     const result: AnalyzedEvent[] = [];
@@ -138,8 +206,22 @@ export default function Home() {
   const selectedMenu = menuDays.find((d) => d.date === selectedDate);
   const selectedEvents = allEvents.filter((e) => e.date === selectedDate);
 
+  const todayDate = defaultSelectedDate;
+  const todayMenu = menuDays.find((d) => d.date === todayDate);
+  const todayEvents = allEvents.filter((e) => e.date === todayDate);
+
   const addManualRule = () => {
     if (!manualTitle.trim()) return;
+
+    if (manualRepeat === "なし" && !manualDate.trim()) {
+      setAnalysisRaw("スポット予定は日付を入力してください。例：5/20");
+      return;
+    }
+
+    if (manualRepeat === "毎月" && !manualMonthDay.trim()) {
+      setAnalysisRaw("毎月予定は日付を入力してください。例：10");
+      return;
+    }
 
     setManualRules([
       {
@@ -166,12 +248,12 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setImageUrl(URL.createObjectURL(file));
     setAnalysisRaw("画像を圧縮中...");
 
     try {
-      const compressedBase64 = await resizeImageToBase64(file, 1200, 0.75);
-      setImageBase64(compressedBase64);
+      const result = await resizeImageToBase64(file, 1200, 0.75);
+      setImagePreview(result.dataUrl);
+      setImageBase64(result.base64);
       setAnalysisRaw("画像準備OK。AI解析できます。");
       setActiveTab("prints");
     } catch {
@@ -216,10 +298,15 @@ export default function Home() {
         setActiveTab("calendar");
       }
     } catch {
-      setAnalysisRaw("通信エラーが発生しました。画像サイズまたはAPI設定を確認してください。");
+      setAnalysisRaw("解析結果の処理に失敗しました。もう一度、紙を明るく撮影してください。");
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const clearSavedData = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    location.reload();
   };
 
   return (
@@ -235,12 +322,12 @@ export default function Home() {
             <>
               <ChildrenCards />
 
+              <TodayTodo todayDate={todayDate} todayMenu={todayMenu} todayEvents={todayEvents} />
+
               <label className="block w-full rounded-3xl bg-blue-600 p-5 text-white text-center font-black shadow cursor-pointer">
                 📷 プリントをスキャン
                 <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
               </label>
-
-              <DayDetail selectedDate={selectedDate} selectedMenu={selectedMenu} selectedEvents={selectedEvents} />
 
               <ManualForm
                 manualTitle={manualTitle}
@@ -261,6 +348,8 @@ export default function Home() {
                 setManualMemo={setManualMemo}
                 addManualRule={addManualRule}
               />
+
+              <DayDetail selectedDate={selectedDate} selectedMenu={selectedMenu} selectedEvents={selectedEvents} />
             </>
           )}
 
@@ -309,19 +398,23 @@ export default function Home() {
               <h2 className="text-xl font-black mb-3">🍚 献立表</h2>
 
               <div className="space-y-2">
-                {menuDays.map((day) => (
-                  <button
-                    key={day.date}
-                    onClick={() => {
-                      setSelectedDate(day.date);
-                      setActiveTab("calendar");
-                    }}
-                    className="w-full rounded-2xl bg-white p-3 text-left shadow-sm"
-                  >
-                    <p className="font-black">{day.date}</p>
-                    <p className="text-sm text-gray-700">{day.menu}</p>
-                  </button>
-                ))}
+                {menuDays.length === 0 ? (
+                  <p className="text-sm text-gray-500">まだ献立表はありません。</p>
+                ) : (
+                  menuDays.map((day) => (
+                    <button
+                      key={day.date}
+                      onClick={() => {
+                        setSelectedDate(day.date);
+                        setActiveTab("calendar");
+                      }}
+                      className="w-full rounded-2xl bg-white p-3 text-left shadow-sm"
+                    >
+                      <p className="font-black">{day.date}</p>
+                      <p className="text-sm text-gray-700">{day.menu}</p>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -335,10 +428,10 @@ export default function Home() {
                 <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
               </label>
 
-              {imageUrl ? (
+              {imagePreview ? (
                 <div className="mt-4 rounded-2xl bg-sky-50 p-3">
                   <p className="mb-2 font-black">読み込んだプリント</p>
-                  <img src={imageUrl} className="w-full rounded-xl border" alt="プリント" />
+                  <img src={imagePreview} className="w-full rounded-xl border" alt="プリント" />
 
                   <button
                     onClick={analyzePrint}
@@ -363,7 +456,12 @@ export default function Home() {
           {activeTab === "settings" && (
             <div className="rounded-3xl bg-white p-4 shadow">
               <h2 className="text-xl font-black">⚙️ 設定</h2>
-              <p className="mt-2 text-sm text-gray-600">組名変更・通知設定は次で追加。</p>
+              <button
+                onClick={clearSavedData}
+                className="mt-4 w-full rounded-2xl bg-red-500 p-3 text-white font-black shadow"
+              >
+                保存データを削除
+              </button>
             </div>
           )}
 
@@ -377,6 +475,48 @@ export default function Home() {
         </section>
       </div>
     </main>
+  );
+}
+
+function TodayTodo({
+  todayDate,
+  todayMenu,
+  todayEvents,
+}: {
+  todayDate: string;
+  todayMenu?: AnalyzedDay;
+  todayEvents: AnalyzedEvent[];
+}) {
+  return (
+    <div className="rounded-3xl bg-white p-4 shadow">
+      <h2 className="text-lg font-black">☀️ 今日やること</h2>
+      <p className="mt-1 text-xs text-gray-500">{todayDate}</p>
+
+      <div className="mt-3 space-y-2">
+        {todayEvents.length > 0 ? (
+          todayEvents.map((event) => (
+            <div key={`${event.date}-${event.title}`} className="rounded-2xl bg-blue-50 p-3">
+              <p className="font-black text-blue-700">
+                {event.child ? `${event.child}：` : ""}
+                {event.title}
+              </p>
+              {event.items && event.items.length > 0 && (
+                <p className="text-xs text-gray-600">{event.items.join("、")}</p>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="rounded-2xl bg-gray-50 p-3">
+            <p className="text-sm text-gray-500">今日の予定はありません</p>
+          </div>
+        )}
+
+        <div className="rounded-2xl bg-yellow-50 p-3">
+          <p className="font-black text-yellow-700">🍚 今日の献立</p>
+          <p className="text-xs text-gray-600">{todayMenu?.menu || "献立なし"}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -422,7 +562,7 @@ function ManualForm(props: {
       <h2 className="text-lg font-black mb-3">✏️ 予定を追加</h2>
 
       <div className="space-y-3">
-        <input value={props.manualTitle} onChange={(e) => props.setManualTitle(e.target.value)} placeholder="例：体操服を着ていく" className="w-full rounded-2xl border p-3 text-sm" />
+        <input value={props.manualTitle} onChange={(e) => props.setManualTitle(e.target.value)} placeholder="例：体操服を着ていく / 遠足 / 歯科検診" className="w-full rounded-2xl border p-3 text-sm" />
 
         <div className="grid grid-cols-3 gap-2">
           <select value={props.manualChild} onChange={(e) => props.setManualChild(e.target.value as ChildTarget)} className="rounded-2xl border p-3 text-sm">
@@ -438,6 +578,10 @@ function ManualForm(props: {
           </select>
         </div>
 
+        {props.manualRepeat === "なし" && (
+          <input value={props.manualDate} onChange={(e) => props.setManualDate(e.target.value)} placeholder="スポット日付 例：5/20" className="w-full rounded-2xl border p-3 text-sm" />
+        )}
+
         {props.manualRepeat === "毎週" && (
           <select value={props.manualDayOfWeek} onChange={(e) => props.setManualDayOfWeek(e.target.value)} className="w-full rounded-2xl border p-3 text-sm">
             <option>月</option><option>火</option><option>水</option><option>木</option><option>金</option><option>土</option><option>日</option>
@@ -448,11 +592,7 @@ function ManualForm(props: {
           <input value={props.manualMonthDay} onChange={(e) => props.setManualMonthDay(e.target.value)} placeholder="毎月何日？ 例：10" className="w-full rounded-2xl border p-3 text-sm" />
         )}
 
-        {props.manualRepeat === "なし" && (
-          <input value={props.manualDate} onChange={(e) => props.setManualDate(e.target.value)} placeholder="日付 例：5/20" className="w-full rounded-2xl border p-3 text-sm" />
-        )}
-
-        <textarea value={props.manualMemo} onChange={(e) => props.setManualMemo(e.target.value)} placeholder="メモ 例：木曜は体操の日" rows={2} className="w-full rounded-2xl border p-3 text-sm" />
+        <textarea value={props.manualMemo} onChange={(e) => props.setManualMemo(e.target.value)} placeholder="メモ 例：木曜は体操の日 / 弁当・水筒" rows={2} className="w-full rounded-2xl border p-3 text-sm" />
 
         <button onClick={props.addManualRule} className="w-full rounded-2xl bg-pink-500 p-3 text-white font-black shadow">
           追加する
@@ -500,29 +640,23 @@ function DayDetail({
 }
 
 function parseGeminiJson(raw: string): AnalyzeResult {
-  try {
-    const cleaned = raw
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
+  const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
 
-    const firstBrace = cleaned.indexOf("{");
-    const lastBrace = cleaned.lastIndexOf("}");
-
-    if (firstBrace === -1 || lastBrace === -1) {
-      throw new Error("JSONが見つかりません");
-    }
-
-    const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
-
-    return JSON.parse(jsonText) as AnalyzeResult;
-  } catch (e) {
-    console.error("JSON解析失敗:", raw);
-    throw e;
+  if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("JSONが見つかりません");
   }
+
+  const jsonText = cleaned.slice(firstBrace, lastBrace + 1);
+  return JSON.parse(jsonText) as AnalyzeResult;
 }
 
-function resizeImageToBase64(file: File, maxWidth: number, quality: number): Promise<string> {
+function resizeImageToBase64(
+  file: File,
+  maxWidth: number,
+  quality: number
+): Promise<{ dataUrl: string; base64: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -549,7 +683,7 @@ function resizeImageToBase64(file: File, maxWidth: number, quality: number): Pro
         const dataUrl = canvas.toDataURL("image/jpeg", quality);
         const base64 = dataUrl.split(",")[1];
 
-        resolve(base64);
+        resolve({ dataUrl, base64 });
       };
 
       img.onerror = () => reject(new Error("image load error"));
