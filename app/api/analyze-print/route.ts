@@ -64,11 +64,15 @@ export async function POST(req: Request) {
       success: true,
       raw: result.response.text(),
     });
-  } catch (error) {
-    console.error(error);
-    return Response.json({
-      success: false,
-      error: "解析失敗",
-    });
-  }
+} catch (error: any) {
+  console.error(error);
+
+  return Response.json({
+    success: false,
+    error:
+      error?.message ||
+      JSON.stringify(error) ||
+      "解析失敗",
+  });
+}
 }
