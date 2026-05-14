@@ -332,7 +332,7 @@ export default function Home() {
     <main className="min-h-screen bg-[#eef7ff] pb-24">
       <div className="mx-auto max-w-md bg-white min-h-screen shadow-2xl">
         <header className="bg-sky-200 p-5 text-center">
-          <h1 className="text-3xl font-black text-blue-700">ほいく紙管理</h1>
+          <h1 className="text-3xl font-black text-blue-700">碧＆海未のほいく紙管理</h1>
           <p className="mt-1 text-xs font-bold text-blue-500">
             保育園プリントを一元管理
           </p>
