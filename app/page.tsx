@@ -41,37 +41,11 @@ type AnalyzeResult = {
 const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const dayOfWeekMap: Record<number, string> = {
-  1: "金",
-  2: "土",
-  3: "日",
-  4: "月",
-  5: "火",
-  6: "水",
-  7: "木",
-  8: "金",
-  9: "土",
-  10: "日",
-  11: "月",
-  12: "火",
-  13: "水",
-  14: "木",
-  15: "金",
-  16: "土",
-  17: "日",
-  18: "月",
-  19: "火",
-  20: "水",
-  21: "木",
-  22: "金",
-  23: "土",
-  24: "日",
-  25: "月",
-  26: "火",
-  27: "水",
-  28: "木",
-  29: "金",
-  30: "土",
-  31: "日",
+  1: "金", 2: "土", 3: "日", 4: "月", 5: "火", 6: "水", 7: "木",
+  8: "金", 9: "土", 10: "日", 11: "月", 12: "火", 13: "水", 14: "木",
+  15: "金", 16: "土", 17: "日", 18: "月", 19: "火", 20: "水", 21: "木",
+  22: "金", 23: "土", 24: "日", 25: "月", 26: "火", 27: "水", 28: "木",
+  29: "金", 30: "土", 31: "日",
 };
 
 export default function Home() {
@@ -188,28 +162,32 @@ export default function Home() {
     setManualMonthDay("");
   };
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setImageUrl(URL.createObjectURL(file));
-    setAnalysisRaw("");
+    setAnalysisRaw("画像を圧縮中...");
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result);
-      const base64 = result.split(",")[1];
-      setImageBase64(base64);
+    try {
+      const compressedBase64 = await resizeImageToBase64(file, 1200, 0.75);
+      setImageBase64(compressedBase64);
+      setAnalysisRaw("画像準備OK。AI解析できます。");
       setActiveTab("prints");
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      setAnalysisRaw("画像の読み込みに失敗しました");
+      setActiveTab("prints");
+    }
   };
 
   const analyzePrint = async () => {
-    if (!imageBase64) return;
+    if (!imageBase64) {
+      setAnalysisRaw("画像データがありません。もう一度スキャンしてください。");
+      return;
+    }
 
     setIsAnalyzing(true);
-    setAnalysisRaw("");
+    setAnalysisRaw("AI解析中...");
 
     try {
       const res = await fetch("/api/analyze-print", {
@@ -221,7 +199,7 @@ export default function Home() {
       const data = await res.json();
 
       if (!data.success) {
-        setAnalysisRaw("解析に失敗しました");
+        setAnalysisRaw(`解析失敗：${data.error || "原因不明"}`);
         return;
       }
 
@@ -238,7 +216,7 @@ export default function Home() {
         setActiveTab("calendar");
       }
     } catch {
-      setAnalysisRaw("通信エラーが発生しました");
+      setAnalysisRaw("通信エラーが発生しました。画像サイズまたはAPI設定を確認してください。");
     } finally {
       setIsAnalyzing(false);
     }
@@ -444,31 +422,19 @@ function ManualForm(props: {
       <h2 className="text-lg font-black mb-3">✏️ 予定を追加</h2>
 
       <div className="space-y-3">
-        <input
-          value={props.manualTitle}
-          onChange={(e) => props.setManualTitle(e.target.value)}
-          placeholder="例：体操服を着ていく"
-          className="w-full rounded-2xl border p-3 text-sm"
-        />
+        <input value={props.manualTitle} onChange={(e) => props.setManualTitle(e.target.value)} placeholder="例：体操服を着ていく" className="w-full rounded-2xl border p-3 text-sm" />
 
         <div className="grid grid-cols-3 gap-2">
           <select value={props.manualChild} onChange={(e) => props.setManualChild(e.target.value as ChildTarget)} className="rounded-2xl border p-3 text-sm">
-            <option>碧</option>
-            <option>海未</option>
-            <option>共通</option>
+            <option>碧</option><option>海未</option><option>共通</option>
           </select>
 
           <select value={props.manualType} onChange={(e) => props.setManualType(e.target.value as ManualType)} className="rounded-2xl border p-3 text-sm">
-            <option>予定</option>
-            <option>持ち物</option>
-            <option>提出物</option>
-            <option>その他</option>
+            <option>予定</option><option>持ち物</option><option>提出物</option><option>その他</option>
           </select>
 
           <select value={props.manualRepeat} onChange={(e) => props.setManualRepeat(e.target.value as RepeatType)} className="rounded-2xl border p-3 text-sm">
-            <option>なし</option>
-            <option>毎週</option>
-            <option>毎月</option>
+            <option>なし</option><option>毎週</option><option>毎月</option>
           </select>
         </div>
 
@@ -479,30 +445,14 @@ function ManualForm(props: {
         )}
 
         {props.manualRepeat === "毎月" && (
-          <input
-            value={props.manualMonthDay}
-            onChange={(e) => props.setManualMonthDay(e.target.value)}
-            placeholder="毎月何日？ 例：10"
-            className="w-full rounded-2xl border p-3 text-sm"
-          />
+          <input value={props.manualMonthDay} onChange={(e) => props.setManualMonthDay(e.target.value)} placeholder="毎月何日？ 例：10" className="w-full rounded-2xl border p-3 text-sm" />
         )}
 
         {props.manualRepeat === "なし" && (
-          <input
-            value={props.manualDate}
-            onChange={(e) => props.setManualDate(e.target.value)}
-            placeholder="日付 例：5/20"
-            className="w-full rounded-2xl border p-3 text-sm"
-          />
+          <input value={props.manualDate} onChange={(e) => props.setManualDate(e.target.value)} placeholder="日付 例：5/20" className="w-full rounded-2xl border p-3 text-sm" />
         )}
 
-        <textarea
-          value={props.manualMemo}
-          onChange={(e) => props.setManualMemo(e.target.value)}
-          placeholder="メモ 例：木曜は体操の日"
-          rows={2}
-          className="w-full rounded-2xl border p-3 text-sm"
-        />
+        <textarea value={props.manualMemo} onChange={(e) => props.setManualMemo(e.target.value)} placeholder="メモ 例：木曜は体操の日" rows={2} className="w-full rounded-2xl border p-3 text-sm" />
 
         <button onClick={props.addManualRule} className="w-full rounded-2xl bg-pink-500 p-3 text-white font-black shadow">
           追加する
@@ -552,4 +502,43 @@ function DayDetail({
 function parseGeminiJson(raw: string): AnalyzeResult {
   const cleaned = raw.replace(/```json/g, "").replace(/```/g, "").trim();
   return JSON.parse(cleaned) as AnalyzeResult;
+}
+
+function resizeImageToBase64(file: File, maxWidth: number, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const scale = Math.min(maxWidth / img.width, 1);
+        const width = Math.round(img.width * scale);
+        const height = Math.round(img.height * scale);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("canvas error"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        const base64 = dataUrl.split(",")[1];
+
+        resolve(base64);
+      };
+
+      img.onerror = () => reject(new Error("image load error"));
+      img.src = String(reader.result);
+    };
+
+    reader.onerror = () => reject(new Error("file read error"));
+    reader.readAsDataURL(file);
+  });
 }
