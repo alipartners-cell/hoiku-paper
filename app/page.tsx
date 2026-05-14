@@ -168,7 +168,7 @@ export default function Home() {
       <div className="mx-auto max-w-md overflow-hidden rounded-[36px] border border-sky-100 bg-white shadow-2xl">
         <header className="bg-sky-200 p-5 text-center">
           <h1 className="text-4xl font-black text-blue-700">
-            ほいく紙管理
+            碧＆海未のほいく紙管理
           </h1>
 
           <p className="mt-1 text-sm font-bold text-blue-500">
