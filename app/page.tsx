@@ -4,74 +4,109 @@ import { useState } from "react";
 
 type Tab = "home" | "calendar" | "menu" | "prints" | "settings";
 
-type DayData = {
-  date: number;
-  events: string[];
-  menu: string;
+type AnalyzedDay = {
+  date: string;
+  menu?: string;
 };
 
-const monthDays: DayData[] = [
-  { date: 1, events: [], menu: "ごはん・みそ汁・魚の照り焼き" },
-  { date: 2, events: [], menu: "パン・シチュー・バナナ" },
-  { date: 3, events: [], menu: "休園日" },
-  { date: 4, events: [], menu: "休園日" },
-  { date: 5, events: [], menu: "カレーライス・サラダ" },
-  { date: 6, events: [], menu: "ごはん・肉じゃが・すまし汁" },
-  { date: 7, events: [], menu: "うどん・野菜かきあげ" },
-  { date: 8, events: ["碧：体操服"], menu: "ごはん・ハンバーグ・野菜スープ" },
-  { date: 9, events: [], menu: "パン・オムレツ・スープ" },
-  { date: 10, events: [], menu: "休園日" },
-  { date: 11, events: [], menu: "休園日" },
-  { date: 12, events: ["土曜保育申込"], menu: "ごはん・からあげ・みそ汁" },
-  { date: 13, events: [], menu: "焼きそば・スープ" },
-  { date: 14, events: [], menu: "ごはん・鮭・野菜炒め" },
-  { date: 15, events: ["碧：体操服"], menu: "パン・クリームシチュー" },
-  { date: 16, events: [], menu: "ごはん・麻婆豆腐・スープ" },
-  { date: 17, events: [], menu: "休園日" },
-  { date: 18, events: [], menu: "休園日" },
-  { date: 19, events: ["土曜保育申込"], menu: "ごはん・コロッケ・みそ汁" },
-  { date: 20, events: ["親子遠足"], menu: "お弁当日" },
-  { date: 21, events: [], menu: "ごはん・鶏の照り焼き・スープ" },
-  { date: 22, events: ["碧：体操服"], menu: "パン・ポトフ・りんご" },
-  { date: 23, events: ["衣替え開始"], menu: "ごはん・白身魚フライ・みそ汁" },
-  { date: 24, events: [], menu: "休園日" },
-  { date: 25, events: ["保護者会"], menu: "休園日" },
-  { date: 26, events: ["土曜保育申込"], menu: "ごはん・豚汁・卵焼き" },
-  { date: 27, events: [], menu: "カレーうどん・ヨーグルト" },
-  { date: 28, events: [], menu: "ごはん・チキンカツ・スープ" },
-  { date: 29, events: ["碧：体操服"], menu: "パン・ミートボール・サラダ" },
-  { date: 30, events: [], menu: "ごはん・さばの味噌煮・すまし汁" },
-  { date: 31, events: [], menu: "休園日" },
-];
+type AnalyzedEvent = {
+  date: string;
+  title: string;
+  items?: string[];
+};
+
+type AnalyzeResult = {
+  type: "menu" | "schedule";
+  days?: AnalyzedDay[];
+  events?: AnalyzedEvent[];
+};
+
+const calendarDays = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState(20);
-  const [analyzed, setAnalyzed] = useState(false);
-
-  const selectedDay = monthDays.find((day) => day.date === selectedDate);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState("5/20");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisRaw, setAnalysisRaw] = useState("");
+  const [menuDays, setMenuDays] = useState<AnalyzedDay[]>([
+    { date: "5/20", menu: "ごはん・ハンバーグ・野菜スープ" },
+  ]);
+  const [events, setEvents] = useState<AnalyzedEvent[]>([
+    { date: "5/20", title: "親子遠足", items: ["弁当", "水筒"] },
+    { date: "5/23", title: "衣替え開始", items: ["夏服登園"] },
+  ]);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setImageUrl(URL.createObjectURL(file));
-    setAnalyzed(false);
-    setActiveTab("prints");
+    setAnalysisRaw("");
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result);
+      const base64 = result.split(",")[1];
+      setImageBase64(base64);
+      setActiveTab("prints");
+    };
+    reader.readAsDataURL(file);
   };
 
-  const analyzePrint = () => {
-    setAnalyzed(true);
-    setActiveTab("menu");
+  const analyzePrint = async () => {
+    if (!imageBase64) return;
+
+    setIsAnalyzing(true);
+    setAnalysisRaw("");
+
+    try {
+      const res = await fetch("/api/analyze-print", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ image: imageBase64 }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setAnalysisRaw("解析に失敗しました");
+        return;
+      }
+
+      const parsed = parseGeminiJson(data.raw);
+      setAnalysisRaw(JSON.stringify(parsed, null, 2));
+
+      if (parsed.type === "menu" && parsed.days) {
+        setMenuDays(parsed.days);
+        setActiveTab("menu");
+      }
+
+      if (parsed.type === "schedule" && parsed.events) {
+        setEvents(parsed.events);
+        setActiveTab("calendar");
+      }
+    } catch {
+      setAnalysisRaw("通信エラーが発生しました");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
+
+  const selectedMenu = menuDays.find((d) => d.date === selectedDate);
+  const selectedEvents = events.filter((e) => e.date === selectedDate);
 
   return (
     <main className="min-h-screen bg-white p-4">
       <div className="mx-auto max-w-md rounded-[34px] bg-sky-50 shadow-2xl border border-sky-100 overflow-hidden">
         <section className="bg-sky-200 px-5 py-5 text-center">
           <h1 className="text-3xl font-black text-blue-800">ほいく紙管理</h1>
-          <p className="text-sm font-bold text-blue-600">保育園プリントを一元管理</p>
+          <p className="text-sm font-bold text-blue-600">
+            保育園プリントを一元管理
+          </p>
         </section>
 
         <section className="p-4 space-y-4">
@@ -96,7 +131,11 @@ export default function Home() {
                 <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
               </label>
 
-              <TodayCard selectedDay={selectedDay} />
+              <DayDetail
+                selectedDate={selectedDate}
+                selectedMenu={selectedMenu}
+                selectedEvents={selectedEvents}
+              />
             </>
           )}
 
@@ -109,28 +148,38 @@ export default function Home() {
               </div>
 
               <div className="grid grid-cols-7 gap-2">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
+                {Array.from({ length: 3 }).map((_, i) => <div key={i} />)}
 
-                {monthDays.map((day) => (
-                  <button
-                    key={day.date}
-                    onClick={() => setSelectedDate(day.date)}
-                    className={`aspect-square rounded-2xl text-sm font-black ${
-                      selectedDate === day.date
-                        ? "bg-blue-600 text-white"
-                        : day.events.length > 0
-                        ? "bg-yellow-100 text-gray-800"
-                        : "bg-sky-50 text-gray-700"
-                    }`}
-                  >
-                    {day.date}
-                  </button>
-                ))}
+                {calendarDays.map((day) => {
+                  const date = `5/${day}`;
+                  const hasEvent = events.some((e) => e.date === date);
+                  const hasMenu = menuDays.some((m) => m.date === date);
+
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => setSelectedDate(date)}
+                      className={`aspect-square rounded-2xl text-sm font-black ${
+                        selectedDate === date
+                          ? "bg-blue-600 text-white"
+                          : hasEvent
+                          ? "bg-yellow-100 text-gray-800"
+                          : hasMenu
+                          ? "bg-green-100 text-gray-800"
+                          : "bg-sky-50 text-gray-700"
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
               </div>
 
-              <TodayCard selectedDay={selectedDay} />
+              <DayDetail
+                selectedDate={selectedDate}
+                selectedMenu={selectedMenu}
+                selectedEvents={selectedEvents}
+              />
             </div>
           )}
 
@@ -138,28 +187,24 @@ export default function Home() {
             <div className="rounded-3xl bg-yellow-50 p-4 shadow">
               <h2 className="text-xl font-black mb-3">🍚 献立表</h2>
 
-              {analyzed && (
-                <div className="mb-3 rounded-2xl bg-green-100 p-3 text-sm font-bold text-green-700">
-                  ✅ スキャンした献立表を反映しました
-                </div>
-              )}
-
-              <TodayCard selectedDay={selectedDay} />
-
-              <div className="mt-4 space-y-2">
-                {monthDays.slice(19, 24).map((day) => (
-                  <button
-                    key={day.date}
-                    onClick={() => {
-                      setSelectedDate(day.date);
-                      setActiveTab("calendar");
-                    }}
-                    className="w-full rounded-2xl bg-white p-3 text-left shadow-sm"
-                  >
-                    <p className="font-black">5/{day.date}</p>
-                    <p className="text-sm text-gray-700">{day.menu}</p>
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {menuDays.length === 0 ? (
+                  <p className="text-sm text-gray-600">まだ献立はありません。</p>
+                ) : (
+                  menuDays.map((day) => (
+                    <button
+                      key={day.date}
+                      onClick={() => {
+                        setSelectedDate(day.date);
+                        setActiveTab("calendar");
+                      }}
+                      className="w-full rounded-2xl bg-white p-3 text-left shadow-sm"
+                    >
+                      <p className="font-black">{day.date}</p>
+                      <p className="text-sm text-gray-700">{day.menu}</p>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -180,10 +225,17 @@ export default function Home() {
 
                   <button
                     onClick={analyzePrint}
-                    className="mt-3 w-full rounded-2xl bg-pink-500 p-3 text-white font-black shadow"
+                    disabled={isAnalyzing}
+                    className="mt-3 w-full rounded-2xl bg-pink-500 p-3 text-white font-black shadow disabled:bg-gray-400"
                   >
-                    🤖 AI解析する
+                    {isAnalyzing ? "🤖 AI解析中..." : "🤖 AI解析する"}
                   </button>
+
+                  {analysisRaw && (
+                    <pre className="mt-3 whitespace-pre-wrap rounded-2xl bg-white p-3 text-xs text-gray-700">
+                      {analysisRaw}
+                    </pre>
+                  )}
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-gray-500">まだプリントはありません。</p>
@@ -194,7 +246,9 @@ export default function Home() {
           {activeTab === "settings" && (
             <div className="rounded-3xl bg-white p-4 shadow">
               <h2 className="text-xl font-black">⚙️ 設定</h2>
-              <p className="mt-2 text-sm text-gray-600">組名変更・通知設定は次で追加。</p>
+              <p className="mt-2 text-sm text-gray-600">
+                組名変更・通知設定は次で追加。
+              </p>
             </div>
           )}
 
@@ -221,23 +275,38 @@ export default function Home() {
   );
 }
 
-function TodayCard({ selectedDay }: { selectedDay?: DayData }) {
-  if (!selectedDay) return null;
-
+function DayDetail({
+  selectedDate,
+  selectedMenu,
+  selectedEvents,
+}: {
+  selectedDate: string;
+  selectedMenu?: AnalyzedDay;
+  selectedEvents: AnalyzedEvent[];
+}) {
   return (
     <div className="mt-4 rounded-3xl bg-white p-4 shadow">
-      <h3 className="text-lg font-black">5/{selectedDay.date} の内容</h3>
+      <h3 className="text-lg font-black">{selectedDate} の内容</h3>
 
       <div className="mt-3 rounded-2xl bg-yellow-50 p-3">
         <p className="font-black">🍚 献立</p>
-        <p className="text-sm text-gray-700">{selectedDay.menu}</p>
+        <p className="text-sm text-gray-700">
+          {selectedMenu?.menu || "献立なし"}
+        </p>
       </div>
 
       <div className="mt-3 rounded-2xl bg-blue-50 p-3">
         <p className="font-black">📌 予定・持ち物</p>
-        {selectedDay.events.length > 0 ? (
-          selectedDay.events.map((event) => (
-            <p key={event} className="text-sm text-gray-700">・{event}</p>
+        {selectedEvents.length > 0 ? (
+          selectedEvents.map((event) => (
+            <div key={`${event.date}-${event.title}`} className="mt-1 text-sm text-gray-700">
+              <p>・{event.title}</p>
+              {event.items && event.items.length > 0 && (
+                <p className="ml-3 text-xs text-gray-600">
+                  持ち物：{event.items.join("、")}
+                </p>
+              )}
+            </div>
           ))
         ) : (
           <p className="text-sm text-gray-500">予定なし</p>
@@ -245,4 +314,13 @@ function TodayCard({ selectedDay }: { selectedDay?: DayData }) {
       </div>
     </div>
   );
+}
+
+function parseGeminiJson(raw: string): AnalyzeResult {
+  const cleaned = raw
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  return JSON.parse(cleaned) as AnalyzeResult;
 }
